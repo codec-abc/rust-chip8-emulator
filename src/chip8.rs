@@ -182,9 +182,20 @@ impl Chip8
     {
         let utc : chrono::DateTime<UTC> = UTC::now();
         let opcode = self.fetch_opcode();
-        println!("stackpointer {:#06X}", self.program_counter);
+
         println!("opcode       {:#06X}", opcode);
-        println!("delay_timer  {:#06X}", self.delay_timer);
+        println!("opcode       {}", opcode);
+        println!("stackpointer {:#06X}", self.program_counter);
+        println!("stackpointer {}", self.program_counter);
+        println!("address_register {}", self.address_register);
+
+        for i in 0 .. 16
+        {
+            println!("register v{} : {}", i , self.registers[i]);
+        }
+        println!("");
+
+        //println!("delay_timer  {:#06X}", self.delay_timer);
         self.execute_opcode(opcode);
         thread::sleep(time::Duration::from_millis(20));
         let utc2 : chrono::DateTime<UTC> = UTC::now();
@@ -439,13 +450,15 @@ impl Chip8
         {
             let nn = (opcode & 0x00FF) as u8;
             let x = (opcode & 0x0F00) >> 8;
-            self.registers[x as usize] = thread_rng().gen::<u8>() & nn;
+            let random_number = thread_rng().gen::<u8>();
+            self.registers[x as usize] =  random_number & nn;
             self.program_counter += 2;
         }
         //DXYN
         else if opcode & 0xF000 == 0xD000
         {
             //println!("drawing sprite");
+            //println!("address_register is {}", self.address_register);
             /*
             Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
             Set VF to 01 if any set pixels are changed to unset, and 00 otherwise.
@@ -466,8 +479,6 @@ impl Chip8
                 //println!("sprite row is {:b}", sprite_row);
                 for j in 0 .. 8
                 {
-                    //println!("vx is {}" , vx);
-                    //println!("vy is {}" , vy);
                     let sprite_pixel = sprite_row & (0b1 << (7-j));
                     //println!("sprite_pixel is {}" , sprite_pixel);
                     let current_pixel = self.screen[vy as usize * 64 + vx as usize];
@@ -479,7 +490,7 @@ impl Chip8
                         }
                     }
                     //println!("sprite_pixel is {}", sprite_pixel);
-                    self.screen[vy as usize * 64 + vx as usize] = (sprite_pixel != 0) | self.screen[vy as usize * 64 + vx as usize];
+                    self.screen[vy as usize * 64 + vx as usize] = (sprite_pixel != 0) ^ self.screen[vy as usize * 64 + vx as usize];
                     vx += 1;
                     vx = vx % 64;
                 }
@@ -593,7 +604,7 @@ impl Chip8
         else if opcode & 0xF0FF == 0xF065
         {
             let x = (opcode & 0x0F00) >> 8;
-            for i in 0 .. x
+            for i in 0 .. x + 1
             {
                 self.registers[i as usize] = self.memory[self.address_register as usize + i as usize];
             }
@@ -606,7 +617,7 @@ impl Chip8
         }
         else
         {
-            panic!("Not found opcode. {} ", opcode);
+            panic!("Not found opcode.  {:#06X} ", opcode);
         }
     }
 

@@ -11,6 +11,7 @@ use glium::{DisplayBuild, Surface};
 use std::env;
 use std::io::prelude::*;
 use std::fs::File;
+use std::io;
 
 fn main()
 {
@@ -74,9 +75,14 @@ fn main()
 
     let mut frame_count = 0;
     let mut chip8 = chip8::Chip8::new(&buffer);
+    let mut iteration = 0;
     loop
     {
+        let mut input = String::new();
+        io::stdin().read_line(&mut input);
         chip8.run_one_cycle();
+        iteration += 1;
+        println!("iteration {} ", iteration);
         let image = glium::texture::RawImage2d::from_raw_rgba(chip8.get_video_buffer_as_rgba(), (chip8.screen_width(), chip8.screen_height()) );
         let opengl_texture = glium::texture::SrgbTexture2d ::new(&display, image).unwrap();
 
