@@ -3,19 +3,36 @@
 extern crate glium;
 extern crate rand;
 
-mod chip8;
+pub mod chip8;
+
 use rand::*;
 use glium::index::PrimitiveType;
+use glium::{DisplayBuild, Surface};
+use std::env;
+use std::io::prelude::*;
+use std::fs::File;
 
 fn main()
 {
-    use glium::{DisplayBuild, Surface};
+    let mut buffer = Vec::new();
+
+    if env::args().count() != 2
+    {
+        panic!("You should pass one and only one argument which is the path to the chip8 rom");
+    }
+    else
+    {
+        let mut file : File = File::open(env::args().nth(1).unwrap()).unwrap();
+        file.read_to_end(&mut buffer).unwrap();
+    }
+
     let display = glium::glutin::WindowBuilder::new().with_dimensions(640,320).with_title(String::from("Chip8 Emulator")).build_glium().unwrap();
 
     let vertex_buffer =
     {
         #[derive(Copy, Clone)]
-        struct Vertex {
+        struct Vertex
+        {
             position: [f32; 2],
             tex_coords: [f32; 2],
         }
@@ -32,10 +49,7 @@ fn main()
         ).unwrap()
     };
 
-    let index_buffer = glium::IndexBuffer::new(&display, PrimitiveType::TriangleStrip,
-                                               &[1 as u16, 2, 0, 3]).unwrap();
-
-    // compiling shaders and linking them together
+    let index_buffer = glium::IndexBuffer::new(&display, PrimitiveType::TriangleStrip, &[1 as u16, 2, 0, 3]).unwrap();
     let program = glium::Program::from_source(&display,
 
                 "#version 140
@@ -59,24 +73,12 @@ fn main()
     ).unwrap();
 
     let mut frame_count = 0;
-    let image_dimensions : (u32, u32) = (64 , 32);
-    let (width, height) = image_dimensions;
-    let size = width as usize *  height as usize * 4;
-    let mut image_data : Vec<u8> = Vec::with_capacity( size );
-
-    for _ in 0 .. size/4
-    {
-        let value = thread_rng().gen::<u8>();
-        image_data.push(value);
-        image_data.push(value);
-        image_data.push(value);
-        image_data.push(255);
-    }
-
+    let mut chip8 = chip8::Chip8::new(&buffer);
     loop
     {
-        alter_video_buffer(&mut image_data, size);
-        let image = glium::texture::RawImage2d::from_raw_rgba(image_data.clone(), image_dimensions);
+        chip8.run_one_cycle();
+        //alter_video_buffer(&mut image_data);
+        let image = glium::texture::RawImage2d::from_raw_rgba(chip8.get_video_buffer_as_rgba(), (chip8.screen_width(), chip8.screen_height()) );
         let opengl_texture = glium::texture::SrgbTexture2d ::new(&display, image).unwrap();
 
         let uniforms = uniform! {
@@ -107,9 +109,10 @@ fn main()
     }
 }
 
-fn alter_video_buffer(buffer : &mut Vec<u8>, size : usize)
+#[allow(dead_code)]
+fn alter_video_buffer(buffer : &mut Vec<u8>)
 {
-    for i in 0 .. size/4
+    for i in 0 .. buffer.len()/4
     {
         let value = thread_rng().gen::<u8>();
         buffer[i * 4 + 0]=value;

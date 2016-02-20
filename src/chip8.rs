@@ -1,8 +1,11 @@
 use std::iter;
+use std::time::Duration;
+use std::thread;
+
 use rand::*;
 
 #[allow(dead_code)]
-pub fn create_font_data() -> Vec<u8>
+fn create_font_data() -> Vec<u8>
 {
     let mut data : Vec<u8> = Vec::with_capacity(5*16);
 
@@ -130,7 +133,6 @@ pub struct Chip8
     program_counter : u16,
     delay_timer : u8,
     sound_timer : u8,
-    //stack_pointer : u16,
     stack : Vec<u16>,
     screen : Vec<bool>,
     keys : Vec<bool>,
@@ -140,9 +142,9 @@ pub struct Chip8
 impl Chip8
 {
     #[allow(dead_code)]
-    pub fn new() -> Chip8
+    pub fn new(rom_content : &Vec<u8>) -> Chip8
     {
-        Chip8
+        let mut chip = Chip8
         {
             registers : iter::repeat(0).take(16).collect::<Vec<u8>>(),
             address_register : 0,
@@ -152,25 +154,51 @@ impl Chip8
 
             program_counter : 0x200,
 
-            //stack_pointer : 0,
             stack : Vec::with_capacity(16),//iter::repeat(0).take(16).collect::<Vec<u16>>(),
             screen : iter::repeat(false).take(64 * 32).collect::<Vec<bool>>(),
             keys : iter::repeat(false).take(16).collect::<Vec<bool>>(),
             memory :  iter::repeat(0).take(4096).collect::<Vec<u8>>(),
             font_data_base_address : 0
+        };
+
+        for i in 0 .. 64 * 32
+        {
+            chip.screen[i] = false;
         }
+
+        let font_data = create_font_data();
+        for i in 0 .. font_data.len()
+        {
+            chip.memory[i] = font_data[i];
+        }
+
+        for i in 0 .. rom_content.len()
+        {
+            chip.memory[i + chip.program_counter as usize] = rom_content[i];
+        }
+
+        return chip;
     }
 
     #[allow(dead_code)]
-    pub fn fetch_opcode(&mut self) -> u16
+    pub fn run_one_cycle(&mut self)
     {
-        let upper_byte_opcode = self.memory[self.program_counter as usize] as u16;
+        let opcode = self.fetch_opcode();
+        println!("{:#06X}", opcode);
+        self.execute_opcode(opcode);
+        thread::sleep(Duration::from_millis(1000));
+    }
+
+    #[allow(dead_code)]
+    fn fetch_opcode(&self) -> u16
+    {
+        let upper_byte_opcode  = self.memory[self.program_counter as usize] as u16;
         let lower_byte_opcode = self.memory[(self.program_counter + 1) as usize] as u16;
         upper_byte_opcode << 8 | lower_byte_opcode
     }
 
     #[allow(dead_code)]
-    pub fn execute_opcode(&mut self, opcode : u16)
+    fn execute_opcode(&mut self, opcode : u16)
     {
         //00E0
         if opcode == 0x00E0
@@ -179,6 +207,7 @@ impl Chip8
             {
                 self.screen[i] = false;
             }
+            self.program_counter += 2;
         }
         //00EE
         else if opcode == 0x00EE
@@ -187,12 +216,12 @@ impl Chip8
             self.program_counter += 2;
         }
         //1NNN
-        else if opcode & 0x1000 == 0x1000
+        else if opcode & 0xF000 == 0x1000
         {
             self.program_counter = opcode & 0x0FFF;
         }
         //2NNN
-        else if opcode & 0x1000 == 0x2000
+        else if opcode & 0xF000 == 0x2000
         {
             let nnn = (opcode & 0x0FFF) as u16;
             self.stack.push(self.program_counter);
@@ -395,6 +424,7 @@ impl Chip8
         //DXYN
         else if opcode & 0xF000 == 0xD000
         {
+            println!("drawing sprite");
             /*
             Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
             Set VF to 01 if any set pixels are changed to unset, and 00 otherwise
@@ -403,6 +433,9 @@ impl Chip8
             let y = (opcode & 0x00F0) >> 4;
             let n = (opcode & 0x000F) >> 0;
 
+
+            println!("n is {}" , n);
+
             let mut has_changed_set_pixel_to_unset = false;
             //CHIP-8 sprites are always eight pixels wide and between one to fifteen pixels high.
             let mut vx = x;
@@ -410,9 +443,13 @@ impl Chip8
             for i in 0 .. n
             {
                 let sprite_row = self.memory[self.address_register as usize + i as usize];
-                for j in 0 .. 7
+                println!("sprite row is {:b}", sprite_row);
+                for j in 0 .. 8
                 {
+                    //println!("vx is {}" , vx);
+                    //println!("vy is {}" , vy);
                     let sprite_pixel = sprite_row & (0b1 << j);
+                    println!("sprite_pixel is {}" , sprite_pixel);
                     let current_pixel = self.screen[vy as usize * 64 + vx as usize];
                     if current_pixel == true
                     {
@@ -421,10 +458,12 @@ impl Chip8
                             has_changed_set_pixel_to_unset = true;
                         }
                     }
-                    self.screen[vy as usize * 64 + vx as usize] = (sprite_pixel == 1) & self.screen[vy as usize * 64 + vx as usize];
+                    //println!("sprite_pixel is {}", sprite_pixel);
+                    self.screen[vy as usize * 64 + vx as usize] = (sprite_pixel != 0) | self.screen[vy as usize * 64 + vx as usize];
                     vx += 1;
                     vx = vx % 64;
                 }
+                vx = x;
                 vy += 1;
                 vy = vy % 32;
             }
@@ -504,70 +543,7 @@ impl Chip8
         else if opcode & 0xF0FF == 0xF029
         {
             let x = (opcode & 0x0F00) >> 8;
-            if self.registers[x as usize] == 0x0
-            {
-                //TODO
-            }
-            else if self.registers[x as usize] == 0x1
-            {
-
-            }
-            else if self.registers[x as usize] == 0x2
-            {
-
-            }
-            else if self.registers[x as usize] == 0x3
-            {
-
-            }
-            else if self.registers[x as usize] == 0x4
-            {
-
-            }
-            else if self.registers[x as usize] == 0x5
-            {
-
-            }
-            else if self.registers[x as usize] == 0x6
-            {
-
-            }
-            else if self.registers[x as usize] == 0x7
-            {
-
-            }
-            else if self.registers[x as usize] == 0x8
-            {
-
-            }
-            else if self.registers[x as usize] == 0x9
-            {
-
-            }
-            else if self.registers[x as usize] == 0xA
-            {
-
-            }
-            else if self.registers[x as usize] == 0xB
-            {
-
-            }
-            else if self.registers[x as usize] == 0xC
-            {
-
-            }
-            else if self.registers[x as usize] == 0xD
-            {
-
-            }
-            else if self.registers[x as usize] == 0xE
-            {
-
-            }
-            else
-            {
-                panic!("not handled character");
-            }
+            self.address_register = self.font_data_base_address + (5 * self.registers[x as usize] as u16);
             self.program_counter += 2;
         }
         //FX33
@@ -609,7 +585,62 @@ impl Chip8
         }
         else
         {
-            panic!("Not found opcode.");
+            panic!("Not found opcode. {} ", opcode);
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn screen_width(&self) -> u32
+    {
+        64
+    }
+
+    #[allow(dead_code)]
+    pub fn screen_height(&self) -> u32
+    {
+        32
+    }
+
+    #[allow(dead_code)]
+    pub fn get_video_buffer_as_rgba(&self) -> Vec<u8>
+    {
+        let mut image_data : Vec<u8> = Vec::with_capacity( (self.screen_width() * self.screen_height() * 4) as usize );
+        for j in 0 .. self.screen_height()
+        {
+            for i in 0 .. self.screen_width()
+            {
+                let u = i;
+                let v = self.screen_height() -1 - j;
+                if self.screen[(u + v * 64) as usize] == false
+                {
+                    image_data.push(0);
+                    image_data.push(0);
+                    image_data.push(0);
+                    image_data.push(255);
+                }
+                else
+                {
+                    image_data.push(255);
+                    image_data.push(255);
+                    image_data.push(255);
+                    image_data.push(255);
+                }
+
+
+                if self.screen[(i + j * 64) as usize] == false
+                {
+                    print!("0");
+                }
+                else
+                {
+                    print!("1");
+                }
+
+            }
+            print!("\r\n");
+        }
+        print!("\r\n");
+
+        return image_data;
     }
 }
