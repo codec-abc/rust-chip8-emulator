@@ -186,7 +186,7 @@ impl Chip8
         let opcode = self.fetch_opcode();
         println!("{:#06X}", opcode);
         self.execute_opcode(opcode);
-        thread::sleep(Duration::from_millis(1000));
+        thread::sleep(Duration::from_millis(200));
     }
 
     #[allow(dead_code)]
@@ -424,32 +424,31 @@ impl Chip8
         //DXYN
         else if opcode & 0xF000 == 0xD000
         {
-            println!("drawing sprite");
+            //println!("drawing sprite");
             /*
             Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
-            Set VF to 01 if any set pixels are changed to unset, and 00 otherwise
+            Set VF to 01 if any set pixels are changed to unset, and 00 otherwise.
+            CHIP-8 sprites are always eight pixels wide and between one to fifteen pixels high.
             */
             let x = (opcode & 0x0F00) >> 8;
             let y = (opcode & 0x00F0) >> 4;
             let n = (opcode & 0x000F) >> 0;
 
-
-            println!("n is {}" , n);
+            let mut vx = self.registers[x as usize];
+            let mut vy = self.registers[y as usize];
 
             let mut has_changed_set_pixel_to_unset = false;
-            //CHIP-8 sprites are always eight pixels wide and between one to fifteen pixels high.
-            let mut vx = x;
-            let mut vy = y;
+
             for i in 0 .. n
             {
                 let sprite_row = self.memory[self.address_register as usize + i as usize];
-                println!("sprite row is {:b}", sprite_row);
+                //println!("sprite row is {:b}", sprite_row);
                 for j in 0 .. 8
                 {
                     //println!("vx is {}" , vx);
                     //println!("vy is {}" , vy);
                     let sprite_pixel = sprite_row & (0b1 << j);
-                    println!("sprite_pixel is {}" , sprite_pixel);
+                    //println!("sprite_pixel is {}" , sprite_pixel);
                     let current_pixel = self.screen[vy as usize * 64 + vx as usize];
                     if current_pixel == true
                     {
@@ -463,7 +462,7 @@ impl Chip8
                     vx += 1;
                     vx = vx % 64;
                 }
-                vx = x;
+                vx = self.registers[x as usize];
                 vy += 1;
                 vy = vy % 32;
             }
@@ -604,6 +603,7 @@ impl Chip8
     #[allow(dead_code)]
     pub fn get_video_buffer_as_rgba(&self) -> Vec<u8>
     {
+        let print_debug = false;
         let mut image_data : Vec<u8> = Vec::with_capacity( (self.screen_width() * self.screen_height() * 4) as usize );
         for j in 0 .. self.screen_height()
         {
@@ -626,21 +626,27 @@ impl Chip8
                     image_data.push(255);
                 }
 
-
-                if self.screen[(i + j * 64) as usize] == false
+                if print_debug
                 {
-                    print!("0");
+                    if self.screen[(i + j * 64) as usize] == false
+                    {
+                        print!("0");
+                    }
+                    else
+                    {
+                        print!("1");
+                    }
                 }
-                else
-                {
-                    print!("1");
-                }
-
             }
+            if print_debug
+            {
+                print!("\r\n");
+            }
+        }
+        if print_debug
+        {
             print!("\r\n");
         }
-        print!("\r\n");
-
         return image_data;
     }
 }
