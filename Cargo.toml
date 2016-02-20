@@ -1,0 +1,11 @@
+[package]
+name = "chip8"
+version = "0.1.0"
+authors = ["codec-abc <viot.camille@outlook.com>"]
+
+[dependencies]
+glium = "0.13.5"
+glutin = "0.4.8"
+gl = "0.5.2"
+libc = "0.2.7"
+rand = "0.3"
