@@ -184,11 +184,13 @@ impl Chip8
         let opcode = self.fetch_opcode();
 
 
+
         println!("opcode            {:#06X}", opcode);
         println!("opcode            {}", opcode);
         println!("stackpointer      {:#06X}", self.program_counter);
         println!("stackpointer      {}", self.program_counter);
         println!("address_register  {}", self.address_register);
+        println!("delay_timer       {}", self.delay_timer);
 
         for i in 0 .. 16
         {
@@ -196,13 +198,16 @@ impl Chip8
         }
         println!("");
 
+
         self.execute_opcode(opcode);
-        thread::sleep(time::Duration::from_millis(20));
+
+        /*
+        thread::sleep(time::Duration::from_millis(16));
         let utc2 : chrono::DateTime<UTC> = UTC::now();
         let nb_milli = (utc2 - utc).num_milliseconds();
         let w = nb_milli as f64 / 16.666666666666666666666666666667;
-        let new_timer_value = self.delay_timer as f64 - w;
-        if new_timer_value <= 0.0
+        let new_timer_value = (self.delay_timer as f64 - w).round() as i32;
+        if new_timer_value <= 0
         {
             self.delay_timer = 0;
         }
@@ -210,6 +215,9 @@ impl Chip8
         {
             self.delay_timer = new_timer_value as u8;
         }
+        */
+        //TODO manage input
+        //TODO handle update differently
         //TODO sound timer
     }
 
@@ -370,16 +378,16 @@ impl Chip8
         {
             let x = (opcode & 0x0F00) >> 8;
             let y = (opcode & 0x00F0) >> 4;
-            let has_borrow = (self.registers[x as usize] as u16) < (self.registers[y as usize] as u16);
+            let has_borrow = (self.registers[x as usize] as u16) > (self.registers[y as usize] as u16);
             if has_borrow
-            {
-                self.registers[15] = 0;
-                self.registers[x as usize] = (256 + self.registers[x as usize] as i32 - self.registers[y as usize] as i32 ) as u8;
-            }
-            else
             {
                 self.registers[x as usize] = self.registers[x as usize] - self.registers[y as usize];
                 self.registers[15] = 1;
+            }
+            else
+            {
+                self.registers[x as usize] = ((self.registers[x as usize] as i32 - self.registers[y as usize] as i32 ) % 256) as u8;
+                self.registers[15] = 0;
             }
             self.program_counter += 2;
         }
@@ -470,6 +478,11 @@ impl Chip8
             let mut vx = self.registers[x as usize];
             let mut vy = self.registers[y as usize];
 
+            //println!("x {}", x);
+            //println!("y {}", y);
+            //println!("self.registers[x as usize] {}", self.registers[x as usize]);
+            //println!("self.registers[y as usize] {}", self.registers[y as usize]);
+
             let mut has_changed_set_pixel_to_unset = false;
 
             for i in 0 .. n
@@ -479,7 +492,6 @@ impl Chip8
                 for j in 0 .. 8
                 {
                     let sprite_pixel = sprite_row & (0b1 << (7-j));
-                    //println!("sprite_pixel is {}" , sprite_pixel);
                     let current_pixel = self.screen[vy as usize * 64 + vx as usize];
                     if current_pixel == true
                     {
@@ -488,8 +500,10 @@ impl Chip8
                             has_changed_set_pixel_to_unset = true;
                         }
                     }
-                    //println!("sprite_pixel is {}", sprite_pixel);
-                    self.screen[vy as usize * 64 + vx as usize] = (sprite_pixel != 0) ^ self.screen[vy as usize * 64 + vx as usize];
+                    if sprite_pixel != 0
+                    {
+                        self.screen[vy as usize * 64 + vx as usize] = (sprite_pixel != 0) ^ self.screen[vy as usize * 64 + vx as usize];
+                    }
                     vx += 1;
                     vx = vx % 64;
                 }
@@ -593,7 +607,7 @@ impl Chip8
         else if opcode & 0xF0FF == 0xF055
         {
             let x = (opcode & 0x0F00) >> 8;
-            for i in 0 .. x
+            for i in 0 .. x + 1
             {
                 self.memory[self.address_register as usize + i as usize] = self.registers[i as usize];
             }

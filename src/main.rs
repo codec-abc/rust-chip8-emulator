@@ -78,8 +78,8 @@ fn main()
     let mut iteration = 0;
     loop
     {
-        //let mut input = String::new();
-        //io::stdin().read_line(&mut input);
+        let mut input = String::new();
+        io::stdin().read_line(&mut input);
         chip8.run_one_cycle();
         iteration += 1;
         println!("iteration {} ", iteration);
