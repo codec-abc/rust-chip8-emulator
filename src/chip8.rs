@@ -1,5 +1,7 @@
 use std::iter;
-use std::time::Duration;
+extern crate chrono;
+use chrono::*;
+use std::time;
 use std::thread;
 
 use rand::*;
@@ -154,17 +156,12 @@ impl Chip8
 
             program_counter : 0x200,
 
-            stack : Vec::with_capacity(16),//iter::repeat(0).take(16).collect::<Vec<u16>>(),
+            stack : Vec::with_capacity(16),
             screen : iter::repeat(false).take(64 * 32).collect::<Vec<bool>>(),
             keys : iter::repeat(false).take(16).collect::<Vec<bool>>(),
             memory :  iter::repeat(0).take(4096).collect::<Vec<u8>>(),
             font_data_base_address : 0
         };
-
-        for i in 0 .. 64 * 32
-        {
-            chip.screen[i] = false;
-        }
 
         let font_data = create_font_data();
         for i in 0 .. font_data.len()
@@ -183,10 +180,26 @@ impl Chip8
     #[allow(dead_code)]
     pub fn run_one_cycle(&mut self)
     {
+        let utc : chrono::DateTime<UTC> = UTC::now();
         let opcode = self.fetch_opcode();
-        println!("{:#06X}", opcode);
+        println!("stackpointer {:#06X}", self.program_counter);
+        println!("opcode       {:#06X}", opcode);
+        println!("delay_timer  {:#06X}", self.delay_timer);
         self.execute_opcode(opcode);
-        thread::sleep(Duration::from_millis(200));
+        thread::sleep(time::Duration::from_millis(20));
+        let utc2 : chrono::DateTime<UTC> = UTC::now();
+        let nb_milli = (utc2 - utc).num_milliseconds();
+        let w = nb_milli as f64 / 16.666666666666666666666666666667;
+        let new_timer_value = self.delay_timer as f64 - w;
+        if new_timer_value <= 0.0
+        {
+            self.delay_timer = 0;
+        }
+        else
+        {
+            self.delay_timer = new_timer_value as u8;
+        }
+        //TODO sound timer
     }
 
     #[allow(dead_code)]
@@ -280,9 +293,16 @@ impl Chip8
         //7XNN
         else if opcode & 0xF000 == 0x7000
         {
-            let nn = (opcode & 0x00FF) as u8;
+            let nn = (opcode & 0x00FF) as u16;
             let x = (opcode & 0x0F00) >> 8;
-            self.registers[x as usize] += nn;
+            if nn + self.registers[x as usize] as u16 > 255
+            {
+                self.registers[x as usize] = ((nn + self.registers[x as usize] as u16) % 256) as u8;
+            }
+            else
+            {
+                self.registers[x as usize] += nn as u8;
+            }
             self.program_counter += 2;
         }
         //8XY0
@@ -323,13 +343,14 @@ impl Chip8
             let x = (opcode & 0x0F00) >> 8;
             let y = (opcode & 0x00F0) >> 4;
             let has_carry = (self.registers[x as usize] as u16 + self.registers[y as usize] as u16) > 255;
-            self.registers[x as usize] = self.registers[x as usize] + self.registers[y as usize];
+
             if has_carry
-            {
+            {   self.registers[x as usize] = ((self.registers[x as usize] as u16) + (self.registers[y as usize] as u16) - 255) as u8;
                 self.registers[15] = 1;
             }
             else
             {
+                self.registers[x as usize] = self.registers[x as usize] + self.registers[y as usize];
                 self.registers[15] = 0;
             }
             self.program_counter += 2;
@@ -447,7 +468,7 @@ impl Chip8
                 {
                     //println!("vx is {}" , vx);
                     //println!("vy is {}" , vy);
-                    let sprite_pixel = sprite_row & (0b1 << j);
+                    let sprite_pixel = sprite_row & (0b1 << (7-j));
                     //println!("sprite_pixel is {}" , sprite_pixel);
                     let current_pixel = self.screen[vy as usize * 64 + vx as usize];
                     if current_pixel == true
@@ -503,7 +524,7 @@ impl Chip8
             }
         }
         //FX07
-        else if opcode & 0xF0FF == 0xF0FF
+        else if opcode & 0xF0FF == 0xF007
         {
             let x = (opcode & 0x0F00) >> 8;
             self.registers[x as usize] = self.delay_timer;
@@ -512,10 +533,11 @@ impl Chip8
         //FX0A
         else if opcode & 0xF0FF == 0xF00A
         {
-            //let x = (opcode & 0x0F00) >> 8;
+            let x = (opcode & 0x0F00) >> 8;
             //TODO
-            panic!("waiting for input");
-            //self.program_counter += 2;
+            self.registers[x as usize] = 0;
+            //panic!("waiting for input");
+            self.program_counter += 2;
         }
         //FX15
         else if opcode & 0xF0FF == 0xF015
@@ -549,8 +571,8 @@ impl Chip8
         else if opcode & 0xF0FF == 0xF033
         {
             let x = (opcode & 0x0F00) >> 8;
-            let hundreds : u8 = self.registers[x as usize] % 100;
-            let tens : u8 = (self.registers[x as usize] - hundreds * 100) % 10;
+            let hundreds : u8 = self.registers[x as usize] / 100;
+            let tens : u8 = (self.registers[x as usize] - hundreds * 100) / 10;
             let ones : u8 = (self.registers[x as usize] - hundreds * 100) - tens * 10;
             self.memory[self.address_register as usize + 0] = hundreds;
             self.memory[self.address_register as usize + 1] = tens;

@@ -2,10 +2,10 @@
 
 extern crate glium;
 extern crate rand;
+extern crate chrono;
 
 pub mod chip8;
 
-use rand::*;
 use glium::index::PrimitiveType;
 use glium::{DisplayBuild, Surface};
 use std::env;
@@ -77,7 +77,6 @@ fn main()
     loop
     {
         chip8.run_one_cycle();
-        //alter_video_buffer(&mut image_data);
         let image = glium::texture::RawImage2d::from_raw_rgba(chip8.get_video_buffer_as_rgba(), (chip8.screen_width(), chip8.screen_height()) );
         let opengl_texture = glium::texture::SrgbTexture2d ::new(&display, image).unwrap();
 
@@ -106,17 +105,5 @@ fn main()
         }
 
         frame_count = frame_count + 1;
-    }
-}
-
-#[allow(dead_code)]
-fn alter_video_buffer(buffer : &mut Vec<u8>)
-{
-    for i in 0 .. buffer.len()/4
-    {
-        let value = thread_rng().gen::<u8>();
-        buffer[i * 4 + 0]=value;
-        buffer[i * 4 + 1]=value;
-        buffer[i * 4 + 2]=value;
     }
 }
