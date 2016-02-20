@@ -183,11 +183,12 @@ impl Chip8
         let utc : chrono::DateTime<UTC> = UTC::now();
         let opcode = self.fetch_opcode();
 
-        println!("opcode       {:#06X}", opcode);
-        println!("opcode       {}", opcode);
-        println!("stackpointer {:#06X}", self.program_counter);
-        println!("stackpointer {}", self.program_counter);
-        println!("address_register {}", self.address_register);
+
+        println!("opcode            {:#06X}", opcode);
+        println!("opcode            {}", opcode);
+        println!("stackpointer      {:#06X}", self.program_counter);
+        println!("stackpointer      {}", self.program_counter);
+        println!("address_register  {}", self.address_register);
 
         for i in 0 .. 16
         {
@@ -195,7 +196,6 @@ impl Chip8
         }
         println!("");
 
-        //println!("delay_timer  {:#06X}", self.delay_timer);
         self.execute_opcode(opcode);
         thread::sleep(time::Duration::from_millis(20));
         let utc2 : chrono::DateTime<UTC> = UTC::now();
@@ -354,9 +354,8 @@ impl Chip8
             let x = (opcode & 0x0F00) >> 8;
             let y = (opcode & 0x00F0) >> 4;
             let has_carry = (self.registers[x as usize] as u16 + self.registers[y as usize] as u16) > 255;
-
             if has_carry
-            {   self.registers[x as usize] = ((self.registers[x as usize] as u16) + (self.registers[y as usize] as u16) - 255) as u8;
+            {   self.registers[x as usize] = ((self.registers[x as usize] as u16) + (self.registers[y as usize] as u16) - 256) as u8;
                 self.registers[15] = 1;
             }
             else
@@ -372,13 +371,14 @@ impl Chip8
             let x = (opcode & 0x0F00) >> 8;
             let y = (opcode & 0x00F0) >> 4;
             let has_borrow = (self.registers[x as usize] as u16) < (self.registers[y as usize] as u16);
-            self.registers[x as usize] = self.registers[x as usize] - self.registers[y as usize];
             if has_borrow
             {
                 self.registers[15] = 0;
+                self.registers[x as usize] = (256 + self.registers[x as usize] as i32 - self.registers[y as usize] as i32 ) as u8;
             }
             else
             {
+                self.registers[x as usize] = self.registers[x as usize] - self.registers[y as usize];
                 self.registers[15] = 1;
             }
             self.program_counter += 2;
@@ -457,7 +457,6 @@ impl Chip8
         //DXYN
         else if opcode & 0xF000 == 0xD000
         {
-            //println!("drawing sprite");
             //println!("address_register is {}", self.address_register);
             /*
             Draw a sprite at position VX, VY with N bytes of sprite data starting at the address stored in I
@@ -610,14 +609,10 @@ impl Chip8
             }
             self.program_counter += 2;
         }
-        //0NNN
-        else if opcode & & 0xF000 == 0x000F
-        {
-            panic!("Calls RCA 1802 program at address NNN. Not necessary for most ROMs.");
-        }
+        //other
         else
         {
-            panic!("Not found opcode.  {:#06X} ", opcode);
+            //panic!("Not found opcode.  {:#06X} ", opcode);
         }
     }
 
