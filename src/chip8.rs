@@ -1,9 +1,9 @@
 use std::iter;
 extern crate chrono;
+extern crate glium;
 use chrono::*;
 use std::time;
 use std::thread;
-
 use rand::*;
 
 #[allow(dead_code)]
@@ -138,13 +138,15 @@ pub struct Chip8
     stack : Vec<u16>,
     screen : Vec<bool>,
     keys : Vec<bool>,
-    font_data_base_address : u16
+    font_data_base_address : u16,
+    time : Option<chrono::DateTime<UTC>>,
+    delay_in_milli : u32,
 }
 
 impl Chip8
 {
     #[allow(dead_code)]
-    pub fn new(rom_content : &Vec<u8>) -> Chip8
+    pub fn new(rom_content : &Vec<u8>, delay_in_milli_ : u32) -> Chip8
     {
         let mut chip = Chip8
         {
@@ -160,7 +162,9 @@ impl Chip8
             screen : iter::repeat(false).take(64 * 32).collect::<Vec<bool>>(),
             keys : iter::repeat(false).take(16).collect::<Vec<bool>>(),
             memory :  iter::repeat(0).take(4096).collect::<Vec<u8>>(),
-            font_data_base_address : 0
+            font_data_base_address : 0,
+            time : None,
+            delay_in_milli : delay_in_milli_,
         };
 
         let font_data = create_font_data();
@@ -178,45 +182,97 @@ impl Chip8
     }
 
     #[allow(dead_code)]
-    pub fn run_one_cycle(&mut self)
+    pub fn run_one_cycle(&mut self, keys : &Vec<glium::glutin::ScanCode>)
     {
-        let utc : chrono::DateTime<UTC> = UTC::now();
+        if self.time == None
+        {
+            self.time = Some(UTC::now());
+        }
+
+        for i in 0 .. self.keys.len()
+        {
+            self.keys[i] = false;
+        }
+
+        for key in keys
+        {
+            println!("key {}", key);
+            match *key
+            {
+                2 => {self.keys[0] = true;},
+                3 => {self.keys[1] = true;},
+                4 => {self.keys[2] = true;},
+                5 => {self.keys[3] = true;},
+
+                16 => {self.keys[4] = true;},
+                17 => {self.keys[5] = true;},
+                18 => {self.keys[6] = true;},
+                19 => {self.keys[7] = true;},
+
+                30 => {self.keys[8] = true;},
+                31 => {self.keys[9] = true;},
+                32 => {self.keys[10] = true;},
+                33 => {self.keys[11] = true;},
+
+                44 => {self.keys[12] = true;},
+                45 => {self.keys[13] = true;},
+                46 => {self.keys[14] = true;},
+                47 => {self.keys[15] = true;},
+                _ => {}
+            }
+        }
+
+        for key in &self.keys
+        {
+            println!("key {}", key);
+        }
+
         let opcode = self.fetch_opcode();
+        self.execute_opcode(opcode, &keys);
 
-        println!("opcode            {:#06X}", opcode);
-        println!("opcode            {}", opcode);
-        println!("program_counter   {:#06X}", self.program_counter);
-        println!("program_counter   {}", self.program_counter);
-        println!("address_register  {}", self.address_register);
-        println!("delay_timer       {}", self.delay_timer);
+        thread::sleep(time::Duration::from_millis(self.delay_in_milli as u64));
 
-        for i in 0 .. 16
+        let utc : chrono::DateTime<UTC> = UTC::now();
+        let nb_milli = (utc - self.time.unwrap()).num_milliseconds();
+        let elasped_delta = nb_milli as f64 / 16.666666666666666666666666666667;
+
+        if elasped_delta > 1.0
         {
-            println!("register v{} : {}", i , self.registers[i]);
-        }
-        println!("");
+            let minus = elasped_delta.round() as i32;
+            self.time = Some(utc);
 
-
-        self.execute_opcode(opcode);
-
-
-        //thread::sleep(time::Duration::from_millis(16));
-        let utc2 : chrono::DateTime<UTC> = UTC::now();
-        let nb_milli = (utc2 - utc).num_milliseconds();
-        let w = nb_milli as f64 / 16.666666666666666666666666666667;
-        //let new_timer_value = (self.delay_timer as f64 - w).round() as i32;
-        let new_timer_value : i32 = self.delay_timer as i32 - 1;
-        if new_timer_value <= 0
-        {
-            self.delay_timer = 0;
-        }
-        else
-        {
-            self.delay_timer = new_timer_value as u8;
+            let new_timer_value : i32 = self.delay_timer as i32 - minus;
+            if new_timer_value <= 0
+            {
+                self.delay_timer = 0;
+            }
+            else
+            {
+                self.delay_timer = new_timer_value as u8;
+            }
         }
 
-        //TODO manage input
-        //TODO handle update differently
+        /*
+                println!("opcode            {:#06X}", opcode);
+                println!("opcode            {}", opcode);
+                println!("program_counter   {:#06X}", self.program_counter);
+                println!("program_counter   {}", self.program_counter);
+                println!("address_register  {}", self.address_register);
+                println!("delay_timer       {}", self.delay_timer);
+
+                for i in 0 .. 16
+                {
+                    println!("register v{} : {}", i , self.registers[i]);
+                }
+
+                println!("stack");
+                for num in &self.stack
+                {
+                    println!("{}", num);
+                }
+
+                println!("");
+        */
         //TODO sound timer
     }
 
@@ -229,7 +285,7 @@ impl Chip8
     }
 
     #[allow(dead_code)]
-    fn execute_opcode(&mut self, opcode : u16)
+    fn execute_opcode(&mut self, opcode : u16, keys : &Vec<glium::glutin::ScanCode>)
     {
         //00E0
         if opcode == 0x00E0
@@ -526,6 +582,7 @@ impl Chip8
         //EX9E
         else if opcode & 0xF0FF == 0xE09E
         {
+            println!("checking key 1");
             let x = (opcode & 0x0F00) >> 8;
             if self.keys[self.registers[x as usize] as usize] ==  true
             {
@@ -540,6 +597,7 @@ impl Chip8
         else if opcode & 0xF0FF == 0xE0A1
         {
             let x = (opcode & 0x0F00) >> 8;
+            println!("checking key 2, {}", self.registers[x as usize]);
             if self.keys[self.registers[x as usize] as usize] !=  true
             {
                 self.program_counter += 4;
@@ -560,10 +618,37 @@ impl Chip8
         else if opcode & 0xF0FF == 0xF00A
         {
             let x = (opcode & 0x0F00) >> 8;
-            //TODO
-            self.registers[x as usize] = 0;
-            //panic!("waiting for input");
-            self.program_counter += 2;
+            let mut has_found_a_key =  false;
+            for key in keys
+            {
+                match *key
+                {
+                    2 => {has_found_a_key = true; self.registers[x as usize] = 0;},
+                    3 => {has_found_a_key = true; self.registers[x as usize] = 1;},
+                    4 => {has_found_a_key = true; self.registers[x as usize] = 2;},
+                    5 => {has_found_a_key = true; self.registers[x as usize] = 3;},
+
+                    16 => {has_found_a_key = true; self.registers[x as usize] = 4;},
+                    17 => {has_found_a_key = true; self.registers[x as usize] = 5;},
+                    18 => {has_found_a_key = true; self.registers[x as usize] = 6;},
+                    19 => {has_found_a_key = true; self.registers[x as usize] = 7;},
+
+                    30 => {has_found_a_key = true; self.registers[x as usize] = 8;},
+                    31 => {has_found_a_key = true; self.registers[x as usize] = 9;},
+                    32 => {has_found_a_key = true; self.registers[x as usize] = 10;},
+                    33 => {has_found_a_key = true; self.registers[x as usize] = 11;},
+
+                    44 => {has_found_a_key = true; self.registers[x as usize] = 12;},
+                    45 => {has_found_a_key = true; self.registers[x as usize] = 13;},
+                    46 => {has_found_a_key = true; self.registers[x as usize] = 14;},
+                    47 => {has_found_a_key = true; self.registers[x as usize] = 15;},
+                    _=> {}
+                };
+            }
+            if has_found_a_key
+            {
+                self.program_counter += 2;
+            }
         }
         //FX15
         else if opcode & 0xF0FF == 0xF015
