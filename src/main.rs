@@ -93,7 +93,8 @@ fn main()
                 [0.0, 0.0, 1.0, 0.0],
                 [0.0, 0.0, 0.0, 1.0f32]
             ],
-            tex: &opengl_texture,
+            tex: glium::uniforms::Sampler::new(&opengl_texture)
+                        .magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
         };
 
         let mut target = display.draw();
