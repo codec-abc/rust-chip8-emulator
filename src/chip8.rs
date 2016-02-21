@@ -183,12 +183,10 @@ impl Chip8
         let utc : chrono::DateTime<UTC> = UTC::now();
         let opcode = self.fetch_opcode();
 
-
-
         println!("opcode            {:#06X}", opcode);
         println!("opcode            {}", opcode);
-        println!("stackpointer      {:#06X}", self.program_counter);
-        println!("stackpointer      {}", self.program_counter);
+        println!("program_counter   {:#06X}", self.program_counter);
+        println!("program_counter   {}", self.program_counter);
         println!("address_register  {}", self.address_register);
         println!("delay_timer       {}", self.delay_timer);
 
@@ -201,12 +199,13 @@ impl Chip8
 
         self.execute_opcode(opcode);
 
-        /*
-        thread::sleep(time::Duration::from_millis(16));
+
+        //thread::sleep(time::Duration::from_millis(16));
         let utc2 : chrono::DateTime<UTC> = UTC::now();
         let nb_milli = (utc2 - utc).num_milliseconds();
         let w = nb_milli as f64 / 16.666666666666666666666666666667;
-        let new_timer_value = (self.delay_timer as f64 - w).round() as i32;
+        //let new_timer_value = (self.delay_timer as f64 - w).round() as i32;
+        let new_timer_value : i32 = self.delay_timer as i32 - 1;
         if new_timer_value <= 0
         {
             self.delay_timer = 0;
@@ -215,7 +214,7 @@ impl Chip8
         {
             self.delay_timer = new_timer_value as u8;
         }
-        */
+
         //TODO manage input
         //TODO handle update differently
         //TODO sound timer
@@ -478,6 +477,9 @@ impl Chip8
             let mut vx = self.registers[x as usize];
             let mut vy = self.registers[y as usize];
 
+
+            vx = vx % 64;
+            vy = vy % 32;
             //println!("x {}", x);
             //println!("y {}", y);
             //println!("self.registers[x as usize] {}", self.registers[x as usize]);
@@ -627,6 +629,7 @@ impl Chip8
         else
         {
             //panic!("Not found opcode.  {:#06X} ", opcode);
+            self.program_counter += 2;
         }
     }
 
